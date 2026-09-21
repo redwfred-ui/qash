@@ -5,62 +5,85 @@ const cheerio = require('cheerio');
 const BASE_URL = 'https://wwv.qeseh.com';
 const SERIES_PATH = '/series/مسلسل-تاشاك-بو-الدنيز-مترجم/';
 
-const builder = new addonBuilder({
+const manifest = {
     id: 'org.qeseh.tasacakbudeniz',
     version: '1.0.0',
     name: 'Taşacak Bu Deniz - قصة عشق',
-    description: 'متابعة مسلسل Taşacak Bu Deniz مترجم للعربية من موقع قصة عشق',
+    description: 'متابعة مسلسل هذا البحر سيفيض (Taşacak Bu Deniz) مترجم للعربية من موقع قصة عشق',
     resources: ['catalog', 'meta', 'stream'],
     types: ['series'],
     catalogs: [
         {
             type: 'series',
             id: 'qeseh_catalog',
-            name: 'Taşacak Bu Deniz'
+            name: 'Taşacak Bu Deniz (هذا البحر سيفيض)'
         }
-    ]
-});
+    ],
+    idPrefixes: ['qeseh_']
+};
+
+const builder = new addonBuilder(manifest);
 
 const HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Referer': BASE_URL
+    'Referer': BASE_URL,
+    'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8'
 };
 
-// 1. Catalog Handler
+// 1. Catalog Handler - إظهار المسلسل في القائمة
 builder.defineCatalogHandler(async (args) => {
-    if (args.id === 'qeseh_catalog') {
+    if (args.type === 'series' && args.id === 'qeseh_catalog') {
         return {
             metas: [{
                 id: 'qeseh_tasacak_bu_deniz',
                 type: 'series',
-                name: 'Taşacak Bu Deniz',
+                name: 'Taşacak Bu Deniz (هذا البحر سيفيض)',
                 poster: 'https://wwv.qeseh.com/wp-content/uploads/2024/09/tasacak-bu-deniz.jpg',
-                description: 'مسلسل Taşacak Bu Deniz مترجم عبر قصة عشق'
+                description: 'مسلسل هذا البحر سيفيض (Taşacak Bu Deniz) مترجم للعربية عبر موقع قصة عشق'
             }]
         };
     }
     return { metas: [] };
 });
 
-// 2. Meta Handler
+// 2. Meta Handler - جلب الحلقات وتفاصيل المسلسل
 builder.defineMetaHandler(async (args) => {
-    if (args.id !== 'qeseh_tasacak_bu_deniz') return { meta: {} };
+    if (args.id !== 'qeseh_tasacak_bu_deniz') {
+        return { meta: {} };
+    }
 
     try {
-        const { data } = await axios.get(`${BASE_URL}${SERIES_PATH}`, { headers: HEADERS });
-        const $ = cheerio.load(data);
+        const targetUrl = BASE_URL + SERIES_PATH;
+        const response = await axios.get(targetUrl, { headers: HEADERS, timeout: 10000 });
+        const $ = cheerio.load(response.data);
         const videos = [];
 
-        $('.episodes-list a, .EpisodesList a, a[href*="/episode/"]').each((i, el) => {
+        $('.episodes-list a, .EpisodesList a, a[href*="/episode/"], a[href*="حلقة"]').each((i, el) => {
             const href = $(el).attr('href');
-            const titleText = $(el).text().trim() \vert{}\vert{}$(el).attr('title') || '';
-            const epMatch = titleText.match(/الحلقة\s*(\d+)/i) || href.match(/حلقة-(\d+)/i) || href.match(/episode-(\d+)/i);
+            if (!href) return;
 
-            if (epMatch && href) {
-                const epNum = parseInt(epMatch[1], 10);
+            const text = $(el).text().trim();
+            const titleAttr = $(el).attr('title') || '';
+            const combinedText = text ? text : titleAttr;
+
+            // استخراج رقم الحلقة
+            let epNum = null;
+            const matchText = combinedText.match(/الحلقة\s*(\d+)/i) || href.match(/حلقة-(\d+)/i) || href.match(/episode-(\d+)/i) || href.match(/-(\d+)\//);
+
+            if (matchText && matchText[1]) {
+                epNum = parseInt(matchText[1], 10);
+            }
+
+            if (epNum && !isNaN(epNum)) {
+                let fullHref = href;
+                if (href.startsWith('/')) {
+                    fullHref = BASE_URL + href;
+                }
+
+                const encodedUrl = Buffer.from(fullHref).toString('base64');
                 videos.push({
-                    id: `qeseh_ep_${epNum}:${Buffer.from(href).toString('base64')}`,
-                    title: `الحلقة ${epNum}`,
+                    id: 'qeseh_ep_' + epNum + ':' + encodedUrl,
+                    title: 'الحلقة ' + epNum,
                     season: 1,
                     episode: epNum,
                     released: new Date().toISOString()
@@ -68,6 +91,7 @@ builder.defineMetaHandler(async (args) => {
             }
         });
 
+        // إزالة التكرار وترتيب الحلقات تصاعدياً
         const episodesMap = new Map();
         videos.forEach(v => {
             if (!episodesMap.has(v.episode)) {
@@ -81,10 +105,10 @@ builder.defineMetaHandler(async (args) => {
             meta: {
                 id: 'qeseh_tasacak_bu_deniz',
                 type: 'series',
-                name: 'Taşacak Bu Deniz',
+                name: 'Taşacak Bu Deniz (هذا البحر سيفيض)',
                 poster: 'https://wwv.qeseh.com/wp-content/uploads/2024/09/tasacak-bu-deniz.jpg',
                 background: 'https://wwv.qeseh.com/wp-content/uploads/2024/09/tasacak-bu-deniz.jpg',
-                description: 'جميع حلقات مسلسل Taşacak Bu Deniz مترجمة للعربية.',
+                description: 'جميع حلقات مسلسل هذا البحر سيفيض (Taşacak Bu Deniz) مترجمة للعربية من قصة عشق.',
                 videos: sortedVideos
             }
         };
@@ -94,40 +118,54 @@ builder.defineMetaHandler(async (args) => {
     }
 });
 
-// 3. Stream Handler
+// 3. Stream Handler - استخراج مشغلات الفيديو
 builder.defineStreamHandler(async (args) => {
-    if (!args.id.startsWith('qeseh_ep_')) return { streams: [] };
+    if (!args.id || !args.id.startsWith('qeseh_ep_')) {
+        return { streams: [] };
+    }
 
     try {
-        const [_, base64Url] = args.id.split(':');
+        const parts = args.id.split(':');
+        if (parts.length < 2) return { streams: [] };
+
+        const base64Url = parts[1];
         const episodeUrl = Buffer.from(base64Url, 'base64').toString('utf-8');
 
-        const { data } = await axios.get(episodeUrl, { headers: HEADERS });
-        const $ = cheerio.load(data);
+        const response = await axios.get(episodeUrl, { headers: HEADERS, timeout: 10000 });
+        const $ = cheerio.load(response.data);
 
-        const iframeSrc = $('iframe').attr('src') \vert{}\vert{}$('iframe[src*="embed"]').attr('src');
-
-        if (iframeSrc) {
-            const finalIframe = iframeSrc.startsWith('//') ? `https:${iframeSrc}` : iframeSrc;
-
-            return {
-                streams: [
-                    {
-                        title: 'مشاهدة عبر المشغل الخارجي (قائم)',
-                        externalUrl: finalIframe
-                    }
-                ]
-            };
+        // البحث عن رابط المشغل (iframe)
+        let iframeSrc = $('iframe').attr('src');
+        if (!iframeSrc) {
+            iframeSrc = $('iframe[src*="embed"]').attr('src');
+        }
+        if (!iframeSrc) {
+            iframeSrc = $('iframe[src*="player"]').attr('src');
         }
 
-        return {
-            streams: [
-                {
-                    title: 'فتح الحلقة على موقع قصة عشق',
-                    externalUrl: episodeUrl
-                }
-            ]
-        };
+        const streams = [];
+
+        if (iframeSrc) {
+            let finalIframe = iframeSrc;
+            if (iframeSrc.startsWith('//')) {
+                finalIframe = 'https:' + iframeSrc;
+            } else if (iframeSrc.startsWith('/')) {
+                finalIframe = BASE_URL + iframeSrc;
+            }
+
+            streams.push({
+                title: 'مشاهدة عبر المشغل (قصة عشق)',
+                externalUrl: finalIframe
+            });
+        }
+
+        // خيار احتياطي دائماً لتمرير رابط الحلقة المباشر
+        streams.push({
+            title: 'فتح الحلقة على موقع قصة عشق مباشرة',
+            externalUrl: episodeUrl
+        });
+
+        return { streams: streams };
     } catch (error) {
         console.error('Error fetching stream:', error.message);
         return { streams: [] };
