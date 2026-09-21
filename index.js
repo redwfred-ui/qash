@@ -42,7 +42,7 @@ builder.defineCatalogHandler(async (args) => {
     return { metas: [] };
 });
 
-// 2. Meta Handler (Fetches episodes dynamically)
+// 2. Meta Handler
 builder.defineMetaHandler(async (args) => {
     if (args.id !== 'qeseh_tasacak_bu_deniz') return { meta: {} };
 
@@ -68,7 +68,6 @@ builder.defineMetaHandler(async (args) => {
             }
         });
 
-        // Deduplicate and sort episodes
         const episodesMap = new Map();
         videos.forEach(v => {
             if (!episodesMap.has(v.episode)) {
@@ -95,7 +94,7 @@ builder.defineMetaHandler(async (args) => {
     }
 });
 
-// 3. Stream Handler (Scrapes iframe & player links)
+// 3. Stream Handler
 builder.defineStreamHandler(async (args) => {
     if (!args.id.startsWith('qeseh_ep_')) return { streams: [] };
 
@@ -106,7 +105,6 @@ builder.defineStreamHandler(async (args) => {
         const { data } = await axios.get(episodeUrl, { headers: HEADERS });
         const $ = cheerio.load(data);
 
-        // Corrected Line 128 (using Standard Logical OR ||)
         const iframeSrc = $('iframe').attr('src') \vert{}\vert{}$('iframe[src*="embed"]').attr('src');
 
         if (iframeSrc) {
