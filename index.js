@@ -30,7 +30,7 @@ const HEADERS = {
     'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8'
 };
 
-// 1. Catalog Handler - إظهار المسلسل في القائمة
+// 1. Catalog Handler - عرض المسلسل في القائمة
 builder.defineCatalogHandler(async (args) => {
     if (args.type === 'series' && args.id === 'qeseh_catalog') {
         return {
@@ -66,7 +66,6 @@ builder.defineMetaHandler(async (args) => {
             const titleAttr = $(el).attr('title') || '';
             const combinedText = text ? text : titleAttr;
 
-            // استخراج رقم الحلقة
             let epNum = null;
             const matchText = combinedText.match(/الحلقة\s*(\d+)/i) || href.match(/حلقة-(\d+)/i) || href.match(/episode-(\d+)/i) || href.match(/-(\d+)\//);
 
@@ -91,7 +90,7 @@ builder.defineMetaHandler(async (args) => {
             }
         });
 
-        // إزالة التكرار وترتيب الحلقات تصاعدياً
+        // إزالة التكرار وترتيب الحلقات
         const episodesMap = new Map();
         videos.forEach(v => {
             if (!episodesMap.has(v.episode)) {
@@ -118,7 +117,7 @@ builder.defineMetaHandler(async (args) => {
     }
 });
 
-// 3. Stream Handler - استخراج مشغلات الفيديو
+// 3. Stream Handler - جلب واستخراج مشغلات الحلقات
 builder.defineStreamHandler(async (args) => {
     if (!args.id || !args.id.startsWith('qeseh_ep_')) {
         return { streams: [] };
@@ -134,7 +133,6 @@ builder.defineStreamHandler(async (args) => {
         const response = await axios.get(episodeUrl, { headers: HEADERS, timeout: 10000 });
         const $ = cheerio.load(response.data);
 
-        // البحث عن رابط المشغل (iframe)
         let iframeSrc = $('iframe').attr('src');
         if (!iframeSrc) {
             iframeSrc = $('iframe[src*="embed"]').attr('src');
@@ -159,7 +157,6 @@ builder.defineStreamHandler(async (args) => {
             });
         }
 
-        // خيار احتياطي دائماً لتمرير رابط الحلقة المباشر
         streams.push({
             title: 'فتح الحلقة على موقع قصة عشق مباشرة',
             externalUrl: episodeUrl
@@ -172,5 +169,6 @@ builder.defineStreamHandler(async (args) => {
     }
 });
 
+// استقبال المنفذ الممرر من Railway أو استخدام 7000
 const PORT = process.env.PORT || 7000;
 serveHTTP(builder.getInterface(), { port: PORT });
